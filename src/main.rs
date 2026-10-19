@@ -190,7 +190,10 @@ async fn main() -> Result<()> {
             // Without a running WM the rules are still checked; only the window matches are skipped.
             let clients = match send_ipc_command(&IpcCommand::QueryClients).await {
                 Ok(IpcResponse::Clients(c)) => Some(c),
-                _ => None,
+                _ => match chickenwm_core::ipc::send_ipc_command_to(chickenwm_core::ipc::PIPE_NAME_WM, &IpcCommand::QueryClients).await {
+                    Ok(IpcResponse::Clients(c)) => Some(c),
+                    _ => None,
+                },
             };
             let offline = clients.is_none();
             let clients = clients.unwrap_or_default();
@@ -396,10 +399,14 @@ async fn main() -> Result<()> {
             return Ok(());
         }
         Commands::Monitors => {
-            match send_ipc_command(&IpcCommand::QueryMonitors).await {
+            let resp = match send_ipc_command(&IpcCommand::QueryMonitors).await {
+                Ok(r) => Ok(r),
+                Err(_) => chickenwm_core::ipc::send_ipc_command_to(chickenwm_core::ipc::PIPE_NAME_WM, &IpcCommand::QueryMonitors).await,
+            };
+            match resp {
                 Ok(IpcResponse::Monitors(monitors)) => print_monitors(&monitors, cli.json)?,
                 _ => {
-                    // Fallback to direct Win32/DXGI monitor query if daemon is not running
+                    // Fallback to direct Win32/DXGI monitor query if daemon and WM are not running
                     let monitors = enumerate_monitors();
                     print_monitors(&monitors, cli.json)?;
                 }
@@ -435,7 +442,40 @@ async fn main() -> Result<()> {
         Commands::Monitors | Commands::RestoreExplorer | Commands::RestoreWindows | Commands::Theme { .. } | Commands::RenderWallpaper { .. } | Commands::Notify { .. } | Commands::Notifications | Commands::Doctor { .. } | Commands::Update { .. } | Commands::CheckConfig | Commands::WindowRules => unreachable!(),
     };
 
-    let response = send_ipc_command(&ipc_cmd).await?;
+    let response = match send_ipc_command(&ipc_cmd).await {
+        Ok(r) => r,
+        Err(_) => {
+            match &ipc_cmd {
+                IpcCommand::SetWallpaper { .. } => {
+                    chickenwm_core::ipc::send_ipc_command_to(chickenwm_core::ipc::PIPE_NAME_PAPER, &ipc_cmd).await?
+                }
+                IpcCommand::SummonLauncher => {
+                    if let Ok(r) = chickenwm_core::ipc::send_ipc_command_to(chickenwm_core::ipc::PIPE_NAME_LAUNCHER, &ipc_cmd).await {
+                        r
+                    } else {
+                        // Fallback: spawn launcher binary
+                        let mut spawned = std::process::Command::new("chickenwm-launcher.exe").spawn().is_ok();
+                        if !spawned {
+                            if let Ok(mut exe) = std::env::current_exe() {
+                                exe.set_file_name("chickenwm-launcher.exe");
+                                spawned = std::process::Command::new(exe).spawn().is_ok();
+                            }
+                        }
+                        if spawned {
+                            IpcResponse::Ok { message: "Launched chickenwm-launcher".to_string() }
+                        } else {
+                            anyhow::bail!("Could not summon or launch chickenwm-launcher");
+                        }
+                    }
+                }
+                _ => {
+                    chickenwm_core::ipc::send_ipc_command_to(chickenwm_core::ipc::PIPE_NAME_WM, &ipc_cmd)
+                        .await
+                        .context("Neither chickenwm-rooster nor chickenwm-wm are responding on IPC")?
+                }
+            }
+        }
+    };
     if cli.json {
         println!("{}", serde_json::to_string_pretty(&response)?);
         return Ok(());
