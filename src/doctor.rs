@@ -226,17 +226,32 @@ pub fn run(fix_mode: bool) -> Vec<Check> {
     }
 
     // Admin task
-    let task = chickenwm_core::elevation::admin_task_exists();
-    checks.push(check(
-        "admin task",
-        if task { Level::Ok } else { Level::Info },
-        if task {
-            format!("scheduled task `{}` is installed (elevated start without a UAC prompt)", chickenwm_core::elevation::ADMIN_TASK_NAME)
-        } else {
-            "not installed: ChickenWM can't manage elevated windows".to_owned()
-        },
-        None,
-    ));
+    // It has to start the rooster installed next to us: one left over from another location
+    // "starts" but runs nothing (rooster then falls back to the UAC prompt and re-registers it).
+    let rooster = std::env::current_exe().ok().map(|mut p| {
+        p.set_file_name("chickenwm-rooster.exe");
+        p
+    });
+    match chickenwm_core::elevation::admin_task_command() {
+        None => checks.push(check(
+            "admin task",
+            Level::Info,
+            "not installed: ChickenWM can't manage elevated windows",
+            None,
+        )),
+        Some(cmd) if rooster.as_deref().is_some_and(chickenwm_core::elevation::admin_task_runs) => checks.push(check(
+            "admin task",
+            Level::Ok,
+            format!("scheduled task `{}` starts {} (elevated start without a UAC prompt)", chickenwm_core::elevation::ADMIN_TASK_NAME, cmd.display()),
+            None,
+        )),
+        Some(cmd) => checks.push(check(
+            "admin task",
+            Level::Warn,
+            format!("scheduled task `{}` starts {}, not this install's rooster", chickenwm_core::elevation::ADMIN_TASK_NAME, cmd.display()),
+            Some("toggle Settings > General > Run ChickenWM as administrator off and on, or just start ChickenWM and approve the prompt once"),
+        )),
+    }
 
     // Modules
     let mut running = Vec::new();

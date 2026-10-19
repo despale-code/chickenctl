@@ -2,6 +2,7 @@
 //! Sends IPC commands over `\\.\pipe\chickenwm-ipc` and inspects window/monitor/daemon state.
 
 mod doctor;
+mod update;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -57,6 +58,13 @@ enum Commands {
         /// Automatically repair safe problems (broken shell path, duplicate modules, missing theme/config files, DWM hook injection).
         #[arg(long)]
         fix: bool,
+    },
+    /// Update the installed ChickenWM programs: checks each one against its GitHub repository, then
+    /// rebuilds and installs the ones that changed, one by one. `--check` only lists them.
+    Update {
+        /// Only report which programs have an update.
+        #[arg(long)]
+        check: bool,
     },
     /// List the system tray icons rooster hosts.
     Tray,
@@ -223,6 +231,9 @@ async fn main() -> Result<()> {
                 }
             }
             return Ok(());
+        }
+        Commands::Update { check } => {
+            return update::run(check);
         }
         Commands::Doctor { fix } => {
             let checks = doctor::run(fix);
@@ -421,7 +432,7 @@ async fn main() -> Result<()> {
             path,
             transition: Some(transition),
         },
-        Commands::Monitors | Commands::RestoreExplorer | Commands::RestoreWindows | Commands::Theme { .. } | Commands::RenderWallpaper { .. } | Commands::Notify { .. } | Commands::Notifications | Commands::Doctor { .. } | Commands::CheckConfig | Commands::WindowRules => unreachable!(),
+        Commands::Monitors | Commands::RestoreExplorer | Commands::RestoreWindows | Commands::Theme { .. } | Commands::RenderWallpaper { .. } | Commands::Notify { .. } | Commands::Notifications | Commands::Doctor { .. } | Commands::Update { .. } | Commands::CheckConfig | Commands::WindowRules => unreachable!(),
     };
 
     let response = send_ipc_command(&ipc_cmd).await?;
