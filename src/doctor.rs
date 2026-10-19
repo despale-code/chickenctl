@@ -48,7 +48,7 @@ fn check_fixed(name: &'static str, detail: impl Into<String>) -> Check {
 }
 
 /// Modules that should run at most once each.
-const MODULES: [&str; 8] = [
+const MODULES: [&str; 7] = [
     "chickenwm-rooster.exe",
     "chickenwm-wm.exe",
     "chickenwm-binds.exe",
@@ -56,7 +56,6 @@ const MODULES: [&str; 8] = [
     "roobar.exe",
     "chickenwm-launcher.exe",
     "chickenwm-notify.exe",
-    "chickenwm-dwm-hook.exe",
 ];
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -79,19 +78,6 @@ fn reg_value(key: &str, name: &str) -> Option<String> {
     })
 }
 
-fn is_dwm_pipe_live() -> bool {
-    unsafe {
-        let wide: Vec<u16> = r"\\.\pipe\dwm_ipc"
-            .encode_utf16()
-            .chain(std::iter::once(0))
-            .collect();
-        windows::Win32::System::Pipes::WaitNamedPipeW(
-            windows::core::PCWSTR(wide.as_ptr()),
-            20,
-        )
-        .as_bool()
-    }
-}
 
 fn terminate_extra_pids(pids: &[u32]) -> usize {
     use windows::Win32::Foundation::CloseHandle;
@@ -121,7 +107,7 @@ pub fn run(fix_mode: bool) -> Vec<Check> {
 
     // Config
     match chickenwm_core::config::load_or_init_config() {
-        Ok((_, cfg)) => {
+        Ok((_, _cfg)) => {
             let issues = chickenwm_core::config_check::validate_user_config().unwrap_or_default();
             let errors = issues.iter().filter(|i| i.severity == chickenwm_core::config_check::Severity::Error).count();
             if issues.is_empty() {
@@ -140,47 +126,7 @@ pub fn run(fix_mode: bool) -> Vec<Check> {
                     Some("run `chickenctl check-config` for the full list"),
                 ));
             }
-            if cfg.misc.dwm_hook_enabled {
-                let mut pipe_live = is_dwm_pipe_live();
-                let mut injected_by_fix = false;
-                if !pipe_live && fix_mode {
-                    if let Ok(mut exe) = std::env::current_exe() {
-                        exe.set_file_name("chickenwm-dwm-hook.exe");
-                        if exe.exists() {
-                            let _ = Command::new(&exe)
-                                .arg("--inject")
-                                .stdout(std::process::Stdio::null())
-                                .stderr(std::process::Stdio::null())
-                                .status();
-                            std::thread::sleep(std::time::Duration::from_millis(80));
-                            pipe_live = is_dwm_pipe_live();
-                            injected_by_fix = pipe_live;
-                        }
-                    }
-                }
-                if injected_by_fix {
-                    checks.push(check_fixed(
-                        "dwm hook",
-                        "fixed: injected chickenwm_dwm_hook.dll into dwm.exe (\\\\.\\pipe\\dwm_ipc active)",
-                    ));
-                } else if pipe_live {
-                    checks.push(check(
-                        "dwm hook",
-                        Level::Ok,
-                        "injected into dwm.exe (\\\\.\\pipe\\dwm_ipc active)",
-                        None,
-                    ));
-                } else {
-                    checks.push(check(
-                        "dwm hook",
-                        Level::Warn,
-                        "dwm_hook_enabled = true, but chickenwm_dwm_hook.dll is not yet injected into dwm.exe",
-                        Some("run `chickenwm-dwm-hook --inject` as Administrator or set `dwm_hook_enabled = false`"),
-                    ));
-                }
-            } else {
-                checks.push(check("dwm hook", Level::Ok, "disabled", None));
-            }
+            
         }
         Err(e) => checks.push(check(
             "config",

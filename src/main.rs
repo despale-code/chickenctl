@@ -52,10 +52,10 @@ enum Commands {
     Launcher,
     /// Query ChickenWM daemon, window manager, and module watchdog status.
     Status,
-    /// Check the setup (shell, admin task, modules, IPC, DWM hook, failsafe hotkey, logs) and
+    /// Check the setup (shell, admin task, modules, IPC, failsafe hotkey, logs) and
     /// say what to fix. Pass `--fix` to repair safe issues automatically.
     Doctor {
-        /// Automatically repair safe problems (broken shell path, duplicate modules, missing theme/config files, DWM hook injection).
+        /// Automatically repair safe problems (broken shell path, duplicate modules, missing theme/config files).
         #[arg(long)]
         fix: bool,
     },
