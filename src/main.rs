@@ -97,9 +97,12 @@ enum Commands {
         /// `light` or `dark`.
         #[arg(short, long)]
         mode: Option<String>,
-        /// Icon theme: `system`, `chickenwm` or a folder name under `~/.config/chickenwm/icons`.
+        /// Icon theme: `system`, `chickenwm`, `lucide`, `font-awesome`, `papirus`, or a folder under `~/.config/chickenwm/icons`.
         #[arg(short, long)]
         icons: Option<String>,
+        /// Import and apply a Linux icon theme from a folder or archive (.zip, .tar.gz, .tgz).
+        #[arg(long)]
+        import_icons: Option<std::path::PathBuf>,
         /// Color scheme: dracula, catppuccin, nord, gruvbox, tokyonight, rosepine, solarized, one,
         /// everforest, kanagawa; `none` = generate from the accent.
         #[arg(short, long)]
@@ -254,7 +257,7 @@ async fn main() -> Result<()> {
             println!("ok: explorer.exe restored as default shell and launched.");
             return Ok(());
         }
-        Commands::Theme { accent, mode, icons, preset, app, app_mode, export, import, from_wallpaper, auto_dark, light_at, dark_at, location } => {
+        Commands::Theme { accent, mode, icons, import_icons, preset, app, app_mode, export, import, from_wallpaper, auto_dark, light_at, dark_at, location } => {
             use chickenwm_core::theme;
             if let (Some(app), Some(m)) = (app, app_mode) {
                 let m = theme::AppMode::parse(&m).with_context(|| format!("app mode must be system, light or dark, not {m}"))?;
@@ -325,6 +328,11 @@ async fn main() -> Result<()> {
             }
             if let Some(i) = icons {
                 t.icon_theme = i;
+            }
+            if let Some(archive) = import_icons {
+                let name = chickenwm_core::icon_theme::import_theme_from_path(&archive)?;
+                t.icon_theme = name.clone();
+                println!("ok: icon theme \"{name}\" imported from {}", archive.display());
             }
             if let Some(p) = preset {
                 t.preset = if p.eq_ignore_ascii_case("none") || p.eq_ignore_ascii_case("chickenwm") {
