@@ -5,7 +5,7 @@ use anyhow::{bail, Context, Result};
 use std::os::windows::process::CommandExt;
 use std::process::Command;
 
-const UPDATE_SCRIPT: &str = "https://despale-code.github.io/chickenwm/update.ps1";
+const UPDATE_SCRIPT: &str = "https://raw.githubusercontent.com/despale-code/chickenwm/main/docs/update.ps1";
 const CREATE_NEW_CONSOLE: u32 = 0x0000_0010;
 
 pub fn run(check: bool) -> Result<()> {
