@@ -545,6 +545,17 @@ async fn main() -> Result<()> {
         IpcResponse::NotificationStatus { unread, dnd } => {
             println!("{unread} unread notification(s){}", if dnd { ", do not disturb is on" } else { "" });
         }
+        IpcResponse::DownloaderStatus {
+            active_count,
+            total_count,
+            speed_bps,
+            progress_pct,
+        } => {
+            println!(
+                "{active_count} active / {total_count} total download(s) ({progress_pct}%, {} B/s)",
+                speed_bps
+            );
+        }
         IpcResponse::Tray(icons) => {
             if icons.is_empty() {
                 println!("No tray icons (rooster hosts the tray only while Explorer's taskbar isn't running).");
